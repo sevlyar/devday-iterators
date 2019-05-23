@@ -130,6 +130,30 @@ func BenchmarkList_Iterator(b *testing.B) {
 	}
 }
 
+func BenchmarkList_BufferedIterator(b *testing.B) {
+	b.StopTimer()
+	list := newTestList()
+	buf := make([]int, 4*1024)
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		sum := 0
+		iter := list.BufferedIterator()
+		for {
+			n := iter(buf)
+			if n == 0 {
+				break
+			}
+			for _, item := range buf[:n] {
+				sum += item
+			}
+		}
+		TestSum = sum
+	}
+	if TestSum != testListSum {
+		b.Fatal("invalid sum: ", TestSum, testListSum)
+	}
+}
+
 type IteratorIface interface {
 	NextValue() (int, bool)
 }
@@ -227,4 +251,24 @@ func TestList_Iterator(t *testing.T) {
 		}
 		i++
 	}
+}
+
+func TestList_BufferedIterator(t *testing.T) {
+	list := newTestList()
+	iter := list.BufferedIterator()
+	buf := make([]int, 1000)
+	var i int
+	for {
+		n := iter(buf)
+		if n == 0 {
+			break
+		}
+		for _, item := range buf[:n] {
+			if item != i {
+				t.Fatalf("invalid item at index %d: %d", i, item)
+			}
+			i++
+		}
+	}
+	t.Log(i)
 }

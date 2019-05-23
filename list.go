@@ -85,6 +85,26 @@ func (list List) RightChannelIterator(ctx context.Context) <-chan int {
 	return pipe
 }
 
+func (list List) BufferedIterator() func(b []int) int {
+	var i, j int
+	return func(b []int) (n int) {
+		for i < len(list.chunks) {
+			chunk := list.chunks[i]
+			for j < len(chunk.items) && n < len(b) {
+				b[n] = chunk.items[j]
+				j++
+				n++
+			}
+			if n >= len(b) {
+				return
+			}
+			i++
+			j = 0
+		}
+		return
+	}
+}
+
 func (list List) Iterator() Iterator {
 	return newIterator(list)
 }
