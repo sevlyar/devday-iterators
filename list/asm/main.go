@@ -3,12 +3,12 @@ package main
 import "github.com/sevlyar/devday-iterators/list"
 
 func main() {
-	var l list.List
+	var l list.LinkedList
 	println(SumWalk(l))
 	println(SumIter(l))
 }
 
-func SumWalk(l list.List) (sum int) {
+func SumWalk(l list.LinkedList) (sum int) {
 	l.Walk(func(item int) bool {
 		sum += item
 		return true
@@ -16,10 +16,10 @@ func SumWalk(l list.List) (sum int) {
 	return
 }
 
-func SumIter(l list.List) (sum int) {
+func SumIter(l list.LinkedList) (sum int) {
 	iter := l.Iterator()
-	for iter.Next() {
-		sum += iter.Value()
+	for iter.HasNext() {
+		sum += iter.Next()
 	}
 	return
 }

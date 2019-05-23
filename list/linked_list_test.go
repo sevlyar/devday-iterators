@@ -8,20 +8,22 @@ import (
 var TestSum int
 
 /*
-BenchmarkList_Naive-8   	      				  10	  101412921 ns/op
-BenchmarkListIteration/Iterator-8         	       5	  269244177 ns/op
-BenchmarkListIteration/Walk-8             	       3	  363553354 ns/op
-BenchmarkListIteration/ClosureIterator-8  	       2	  864346965 ns/op
-BenchmarkListIteration/OptimizedChannelIterator-8  1	12649703881 ns/op
-BenchmarkList_RightChannelIterator-8   	       	   1	19535131252 ns/op
-BenchmarkListIteration/ChannelIterator-8  	       1	32133620955 ns/op
+BenchmarkListIteration/Naive-8         	      			  	  10	  101589180 ns/op
+BenchmarkListIteration/LinkedListIterator-8         	       5	  280782978 ns/op
+BenchmarkListIteration/Walk-8                       	       3	  360250251 ns/op
+BenchmarkListIteration/ClosureIterator-8            	       2	  835421574 ns/op
+BenchmarkListIteration/OptimizedChannelIterator-8   	       1	12275172403 ns/op
+BenchmarkList_RightChannelIterator-8   	       	   			   1	19535131252 ns/op
+BenchmarkListIteration/ChannelIterator-8            	       1	31572465377 ns/op
 */
 
 func BenchmarkListIteration(b *testing.B) {
-	b.Run("Iterator", BenchmarkList_Iterator)
+	b.Run("Naive", BenchmarkList_Naive)
+	b.Run("LinkedListIterator", BenchmarkList_Iterator)
 	b.Run("Walk", BenchmarkList_Walk)
 	b.Run("ClosureIterator", BenchmarkList_ClosureIterator)
 	b.Run("OptimizedChannelIterator", BenchmarkList_OptimizedChannelIterator)
+	b.Run("RightChannelIterator", BenchmarkList_RightChannelIterator)
 	b.Run("ChannelIterator", BenchmarkList_ChannelIterator)
 }
 
@@ -31,8 +33,8 @@ func BenchmarkList_Naive(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		sum := 0
-		for _, chunk := range list.chunks {
-			for _, item := range chunk.items {
+		for cur := list.head; cur != nil; cur = cur.next {
+			for _, item := range cur.list.items {
 				sum += item
 			}
 		}
@@ -41,6 +43,15 @@ func BenchmarkList_Naive(b *testing.B) {
 	if TestSum != testListSum {
 		b.Fatal("invalid sum")
 	}
+}
+
+func Sum(list LinkedList) (sum int) {
+	for cur := list.head; cur != nil; cur = cur.next {
+		for _, item := range cur.list.items {
+			sum += item
+		}
+	}
+	return
 }
 
 func BenchmarkList_Walk(b *testing.B) {
@@ -120,8 +131,8 @@ func BenchmarkList_Iterator(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		sum := 0
 		iter := list.Iterator()
-		for iter.Next() {
-			sum += iter.Value()
+		for iter.HasNext() {
+			sum += iter.Next()
 		}
 		TestSum = sum
 	}
@@ -179,7 +190,7 @@ func BenchmarkList_IteratorIface(b *testing.B) {
 // newTestList returns list that uses about 1Gb memory:
 // 134217728 items on 64 bit platform, 16384 chunks by 8192 items.
 // Each item is initialized by its index number.
-func newTestList() List {
+func newTestList() LinkedList {
 	return newList(16384, 8192, func(baseIdx int, data []int) {
 		for i := range data {
 			data[i] = baseIdx + i
@@ -190,7 +201,7 @@ func newTestList() List {
 const testListSum = 9007199187632128
 
 // newShortTestList returns 1024x1024 list (1024 chunks by 1024 items)
-func newShortTestList() List {
+func newShortTestList() LinkedList {
 	return newList(1024, 8*1024, func(baseIdx int, data []int) {
 		for i := range data {
 			data[i] = baseIdx + i
@@ -240,12 +251,40 @@ func TestList_ChannelIterator(t *testing.T) {
 	}
 }
 
+func TestList_RightChannelIterator(t *testing.T) {
+	list := newShortTestList()
+	var i int
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	for item := range list.RightChannelIterator(ctx) {
+		if item != i {
+			t.Fatalf("invalid item at index %d: %d", i, item)
+		}
+		i++
+	}
+}
+
+func SumChannel(ctx context.Context, list LinkedList) (sum int) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for item := range list.RightChannelIterator(ctx) {
+		sum += item
+		if ctx.Err() != nil {
+			continue
+		}
+		if item > 100 {
+			cancel()
+		}
+	}
+	return
+}
+
 func TestList_Iterator(t *testing.T) {
 	list := newTestList()
 	iter := list.Iterator()
 	var i int
-	for iter.Next() {
-		item := iter.Value()
+	for iter.HasNext() {
+		item := iter.Next()
 		if item != i {
 			t.Fatalf("invalid item at index %d: %d", i, item)
 		}
